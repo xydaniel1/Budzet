@@ -6,8 +6,12 @@
 <title>Budżet domowy</title>
 
 <!-- ============================================================
-     WERSJA PLIKU: 1.6   (2026-09-14)
+     WERSJA PLIKU: 1.7   (2026-09-14)
      Historia:
+       1.7 – konto rozpoznawane po parze właściciel + nazwa, nie po samej
+             nazwie: XTB Kasi i XTB Daniela to dwa osobne konta; pytanie
+             o właściciela zawsze przed sprawdzeniem, czy konto już jest;
+             podpis ustawiany przy pierwszym uruchomieniu
        1.6 – dotknięcie kafelka pokazuje wykres i historię konta zamiast
              otwierać formularz; wpis dodaje się przyciskiem przy koncie
        1.5 – formularz wpisu schowany w panelu wysuwanym od dołu: otwiera go
@@ -847,7 +851,7 @@
 <script>
 'use strict';
 
-var APP_VERSION = '1.6';
+var APP_VERSION = '1.7';
 
 var KEY = 'budget-entries';
 var BK = 'budget-last-backup';
@@ -1040,20 +1044,26 @@ function parseAmount(txt) {
 function live() {
   return entries.filter(function (e) { return !e.deleted; });
 }
+/* Konto to para właściciel + nazwa. Bez tego XTB Kasi i XTB Daniela
+   byłyby jednym kontem i wpisy jednej osoby nadpisywałyby drugą. */
+function klucz(own, nazwa) { return (own || '') + '|' + nazwa; }
+function kluczE(e) { return klucz(e.owner, e.account); }
+function nazwaZ(k) { return String(k).slice(String(k).indexOf('|') + 1); }
+function wlascicielZ(k) { return String(k).slice(0, String(k).indexOf('|')); }
+
 function accounts() {
   var seen = {}, out = [];
-  live().forEach(function (e) { if (!seen[e.account]) { seen[e.account] = 1; out.push(e.account); } });
+  live().forEach(function (e) {
+    var k = kluczE(e);
+    if (!seen[k]) { seen[k] = 1; out.push(k); }
+  });
   if (pending && !seen[pending]) out.push(pending);
-  return out.sort(function (a, b) { return a.localeCompare(b, 'pl'); });
+  return out.sort(function (a, b) { return nazwaZ(a).localeCompare(nazwaZ(b), 'pl'); });
 }
 function filtered() {
-  return live().filter(function (e) { return e.account === active; });
+  return live().filter(function (e) { return kluczE(e) === active; });
 }
-function ownerOf(acc) {
-  if (pending === acc && pendingOwner) return pendingOwner;
-  var f = live().filter(function (e) { return e.account === acc; });
-  return f.length ? f[f.length - 1].owner : '';
-}
+function ownerOf(k) { return k ? wlascicielZ(k) : ''; }
 function owners() {
   var seen = {}, out = [];
   live().forEach(function (e) { if (e.owner && !seen[e.owner]) { seen[e.owner] = 1; out.push(e.owner); } });
@@ -1068,20 +1078,20 @@ function ownerVar(own) {
 }
 function totalOfOwner(own, iso) {
   var last = {};
-  live().forEach(function (e) { if (e.date <= iso && e.owner === own) last[e.account] = e.amount; });
+  live().forEach(function (e) { if (e.date <= iso && e.owner === own) last[kluczE(e)] = e.amount; });
   var sum = 0;
   Object.keys(last).forEach(function (k) { sum += last[k]; });
   return sum;
 }
-function lastOf(acc) {
-  var f = live().filter(function (e) { return e.account === acc; });
+function lastOf(k) {
+  var f = live().filter(function (e) { return kluczE(e) === k; });
   return f.length ? f[f.length - 1] : null;
 }
 
 /* suma majątku na dany dzień: ostatnia znana wartość każdego konta z datą <= dzień */
 function totalAt(iso) {
   var last = {};
-  live().forEach(function (e) { if (e.date <= iso) last[e.account] = e.amount; });
+  live().forEach(function (e) { if (e.date <= iso) last[kluczE(e)] = e.amount; });
   var sum = 0;
   Object.keys(last).forEach(function (k) { sum += last[k]; });
   return sum;
@@ -1132,7 +1142,8 @@ function computeDeltas() {
   deltas = {};
   var byAcc = {};
   live().forEach(function (e) {
-    var m = (byAcc[e.account] = byAcc[e.account] || {});
+    var k = kluczE(e);
+    var m = (byAcc[k] = byAcc[k] || {});
     m[e.date] = e.amount;
   });
   Object.keys(byAcc).forEach(function (acc) {
@@ -1411,7 +1422,7 @@ function tileHTML(a) {
   var e = lastOf(a);
   var dd = deltaOf(a, e.date);
   var dt = deltaText(dd);
-  var parts = splitName(a);
+  var parts = splitName(nazwaZ(a));
   var stary = dayNum(todayISO()) - dayNum(e.date) > 60;
   var barwa = ownerOf(a) ? ownerVar(ownerOf(a)) : 'var(--rule)';
   return '<button class="tile' + (a === active ? ' on' : '') + '" data-acc="' + esc(a) + '"' +
@@ -1571,7 +1582,7 @@ function render() {
 
   document.getElementById('firstSec').classList.toggle('hidden', accs.length > 0);
 
-  var parts = splitName(active || '');
+  var parts = splitName(active ? nazwaZ(active) : '');
   var gEl = document.getElementById('exGroup');
   var own = active ? ownerOf(active) : '';
   var gTxt = own ? (parts.group ? own + ' · ' + parts.group : own) : parts.group;
@@ -1609,7 +1620,7 @@ function render() {
     document.getElementById('progMeta').textContent = wl || '';
     document.getElementById('progName').innerHTML =
       '<i style="background:' + (wl ? ownerVar(wl) : 'var(--ink-3)') + '"></i>' +
-      '<span>' + nameHTML(active) + '</span>';
+      '<span>' + nameHTML(nazwaZ(active)) + '</span>';
     document.getElementById('figLast').textContent = zl0(last.amount) + ' zł';
 
     var best = f[0];
@@ -1625,7 +1636,7 @@ function render() {
     var rb = document.getElementById('ranges');
     if (f.length > 1) {
       var series = f.map(function (e) {
-        return { date: e.date, value: e.amount, delta: deltaOf(e.account, e.date) };
+        return { date: e.date, value: e.amount, delta: deltaOf(kluczE(e), e.date) };
       });
       renderRanges(rb, series, chartRange);
       var opt = RANGES.filter(function (r) { return r.id === chartRange; })[0] || RANGES[4];
@@ -1644,9 +1655,9 @@ function render() {
   var hs = document.getElementById('historySec');
   if (f.length) {
     hs.classList.remove('hidden');
-    document.getElementById('histCount').textContent = active;
+    document.getElementById('histCount').textContent = nazwaZ(active);
     document.getElementById('historyPanel').innerHTML = f.slice().reverse().map(function (e) {
-      var d = deltaOf(e.account, e.date), dt = deltaText(d);
+      var d = deltaOf(kluczE(e), e.date), dt = deltaText(d);
       return '<div class="hrow">' +
         dotHTML(d) +
         '<span class="hw num">' + zl(e.amount) + ' zł</span>' +
@@ -1665,7 +1676,7 @@ function render() {
     hs.classList.add('hidden');
   } else {
     hs.classList.remove('hidden');
-    document.getElementById('histCount').textContent = active || '';
+    document.getElementById('histCount').textContent = active ? nazwaZ(active) : '';
     document.getElementById('historyPanel').innerHTML =
       '<div class="blank"><p>Zapisz pierwszy stan tego konta, a zobaczysz tu jego historię.</p></div>';
   }
@@ -1789,25 +1800,27 @@ function needAuthor() {
 }
 
 document.getElementById('saveBtn').addEventListener('click', function () {
-  var name = active;
+  var k = active;
+  var nazwa = k ? nazwaZ(k) : '';
+  var wlasciciel = k ? ownerOf(k) : '';
   var date = dateValue;
   var amount = parseAmount(document.getElementById('amount').value);
 
-  if (!name) { showErr('Najpierw dodaj konto plusem u góry.'); return; }
+  if (!k) { showErr('Najpierw dodaj konto.'); return; }
   if (!date) { showErr('Wybierz datę.'); return; }
   if (isNaN(amount)) { showErr('Wpisz stan konta w złotych.'); return; }
   if (Math.abs(amount) > 1000000000) { showErr('To wygląda na pomyłkę — sprawdź kwotę.'); return; }
 
   needAuthor().then(function (who) {
     if (!who) return;
-    var dup = live().filter(function (e) { return e.account === name && e.date === date; })[0];
+    var dup = live().filter(function (e) { return kluczE(e) === k && e.date === date; })[0];
 
     var go = function () {
       if (!save()) { showErr('Nie udało się zapisać. Sprawdź, czy przeglądarka nie blokuje danych.'); return; }
       showErr('');
       document.getElementById('amount').value = '';
       document.getElementById('amount').blur();
-      if (pending === name) { pending = null; pendingOwner = ''; }
+      if (pending === k) { pending = null; pendingOwner = ''; }
       render();
       renderBackupInfo();
       queueSync();
@@ -1819,12 +1832,11 @@ document.getElementById('saveBtn').addEventListener('click', function () {
     if (dup) {
       ask({
         title: 'Zastąpić wpis?',
-        msg: 'Na ten dzień masz już ' + zl(dup.amount) + ' zł dla konta ' + name + '.',
+        msg: 'Na ten dzień jest już ' + zl(dup.amount) + ' zł dla konta ' + nazwa + '.',
         ok: 'Zastąp'
       }).then(function (v) {
         if (!v) return;
         dup.amount = amount;
-        dup.owner = ownerOf(name) || dup.owner || who;
         dup.author = who;
         dup.updated_at = stamp();
         sortEntries();
@@ -1835,8 +1847,8 @@ document.getElementById('saveBtn').addEventListener('click', function () {
 
     entries.push({
       id: 'e' + Date.now() + Math.random().toString(36).slice(2, 6),
-      account: name, date: date, amount: amount,
-      owner: ownerOf(name) || who,
+      account: nazwa, date: date, amount: amount,
+      owner: wlasciciel,
       author: who, deleted: false, updated_at: stamp()
     });
     sortEntries();
@@ -1845,17 +1857,45 @@ document.getElementById('saveBtn').addEventListener('click', function () {
 });
 
 function dodajKonto() {
-  ask({ title: 'Nowe konto', input: '', placeholder: 'np. Broker - XTB', ok: 'Dalej' })
+  needAuthor().then(function (who) {
+    if (!who) return;
+    pytajONazwe('');
+  });
+}
+
+function pytajONazwe(start) {
+  ask({ title: 'Nowe konto', input: start, placeholder: 'np. Broker - XTB', ok: 'Dalej' })
     .then(function (v) {
       if (v === null) return;
       var nazwa = String(v).trim();
       if (!nazwa) return;
-      if (accounts().indexOf(nazwa) !== -1) { openSheet(nazwa); return; }
+
+      // najpierw czyje, dopiero potem czy takie już jest — inaczej konto
+      // o tej samej nazwie u drugiej osoby zostałoby po cichu podmienione
       askOwner(author || '', 'Czyje jest ' + nazwa + '?').then(function (own) {
         if (own === null) return;
-        pending = nazwa;
+
+        var takie = accounts().filter(function (x) {
+          return wlascicielZ(x) === own &&
+                 nazwaZ(x).toLowerCase() === nazwa.toLowerCase();
+        })[0];
+
+        if (takie) {
+          ask({
+            title: 'Takie konto już jest',
+            msg: nazwaZ(takie) + ' należy już do ' + own + '. Dopisać stan do tego konta?',
+            ok: 'Tak, to samo konto',
+            cancel: 'Zmień nazwę'
+          }).then(function (ok) {
+            if (ok) openSheet(takie);
+            else pytajONazwe(nazwa);
+          });
+          return;
+        }
+
+        pending = klucz(own, nazwa);
         pendingOwner = own;
-        openSheet(nazwa);
+        openSheet(pending);
       });
     });
 }
@@ -1878,7 +1918,7 @@ document.getElementById('exPick').addEventListener('click', function () {
     var head = order.length > 1 ? '<div class="mgroup">' + esc(g) + '</div>' : '';
     return head + groups[g].map(function (x) {
       return '<button class="mitem' + (x === active ? ' on' : '') + '" data-val="' + esc(x) + '">' +
-        esc(x) + '</button>';
+        esc(nazwaZ(x)) + '</button>';
     }).join('');
   }).join('');
 
@@ -1893,49 +1933,47 @@ document.getElementById('exPick').addEventListener('click', function () {
 
 document.getElementById('renameBtn').addEventListener('click', function () {
   if (!active) return;
-  var stara = active;
-  ask({ title: 'Nazwa konta', input: stara, ok: 'Dalej' }).then(function (v) {
+  var staryK = active;
+  ask({ title: 'Nazwa konta', input: nazwaZ(staryK), ok: 'Dalej' }).then(function (v) {
     if (v === null) return;
-    var nowa = String(v).trim() || stara;
-    askOwner(ownerOf(stara), 'Czyje jest ' + nowa + '?').then(function (own) {
+    var nowa = String(v).trim() || nazwaZ(staryK);
+    askOwner(ownerOf(staryK), 'Czyje jest ' + nowa + '?').then(function (own) {
       if (own === null) return;
-      applyRename(stara, nowa, own);
+      applyRename(staryK, nowa, own);
     });
   });
 });
 
-function applyRename(stara, nowa, own) {
-  var kolizja = nowa !== stara && accounts().indexOf(nowa) !== -1;
+function applyRename(staryK, nowa, own) {
+  var nowyK = klucz(own, nowa);
+  if (nowyK === staryK) return;
+  var kolizja = accounts().indexOf(nowyK) !== -1;
 
   var run = function () {
-    if (pending === stara) {
-      pending = kolizja ? null : nowa;
+    if (pending === staryK) {
+      pending = kolizja ? null : nowyK;
       pendingOwner = kolizja ? '' : own;
-      active = nowa;
+      active = nowyK;
       render();
       return;
     }
     entries.forEach(function (e) {
-      if (e.account === stara) { e.account = nowa; e.owner = own; e.updated_at = stamp(); }
+      if (kluczE(e) === staryK) { e.account = nowa; e.owner = own; e.updated_at = stamp(); }
     });
     if (kolizja) {
       var best = {};
       live().forEach(function (e) {
-        if (e.account !== nowa) return;
+        if (kluczE(e) !== nowyK) return;
         if (!best[e.date] || e.amount > best[e.date].amount) best[e.date] = e;
       });
       entries.forEach(function (e) {
-        if (e.account === nowa && !e.deleted && best[e.date] !== e) {
+        if (kluczE(e) === nowyK && !e.deleted && best[e.date] !== e) {
           e.deleted = true; e.updated_at = stamp();
         }
       });
     }
-    // właściciel dotyczy konta, więc wszystkie jego wpisy mają ten sam
-    entries.forEach(function (e) {
-      if (e.account === nowa && !e.deleted && e.owner !== own) { e.owner = own; e.updated_at = stamp(); }
-    });
     sortEntries();
-    active = nowa;
+    active = nowyK;
     if (!save()) { ask({ title: 'Nie udało się zapisać zmiany.' }); return; }
     render();
     queueSync();
@@ -1944,7 +1982,7 @@ function applyRename(stara, nowa, own) {
   if (kolizja) {
     ask({
       title: 'Połączyć konta?',
-      msg: 'Konto ' + nowa + ' już istnieje. Wpisy zostaną scalone, a przy dwóch wpisach z tego samego dnia zostanie wyższy stan.',
+      msg: nowa + ' u ' + own + ' już istnieje. Wpisy zostaną scalone, a przy dwóch wpisach z tego samego dnia zostanie wyższy stan.',
       ok: 'Połącz'
     }).then(function (ok) { if (ok) run(); });
   } else { run(); }
@@ -2217,12 +2255,12 @@ function exportText() {
   var l = live();
   if (!l.length) return '';
   var groups = {};
-  l.forEach(function (e) { (groups[e.account] = groups[e.account] || []).push(e); });
+  l.forEach(function (e) { var k = kluczE(e); (groups[k] = groups[k] || []).push(e); });
   var out = 'BUDŻET DOMOWY (apka v' + APP_VERSION + ') — ' + new Date().toLocaleDateString('pl-PL') + '\n';
   out += 'Majątek razem: ' + zl(totalAt(todayISO())) + ' zł\n\n';
-  Object.keys(groups).sort(function (a, b) { return a.localeCompare(b, 'pl'); }).forEach(function (k) {
-    var own = ownerOf(k);
-    out += k + (own ? '  \u00B7 ' + own : '') + '\n';
+  Object.keys(groups).sort(function (a, b) { return nazwaZ(a).localeCompare(nazwaZ(b), 'pl'); }).forEach(function (k) {
+    var own = wlascicielZ(k);
+    out += nazwaZ(k) + (own ? '  \u00B7 ' + own : '') + '\n';
     groups[k].forEach(function (e) {
       out += '  ' + e.date + '  ' + zl(e.amount) + ' zł' + (e.author ? '  (' + e.author + ')' : '') + '\n';
     });
@@ -2346,6 +2384,8 @@ render();
 renderSync();
 renderBackupInfo();
 if (ghOn()) syncNow(true);
+// na nowym telefonie pytamy o podpis od razu, a nie dopiero przy zapisie
+if (!author && (entries.length || ghOn())) setTimeout(function () { needAuthor(); }, 500);
 </script>
 </body>
 </html>
