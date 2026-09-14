@@ -6,8 +6,10 @@
 <title>Budżet domowy</title>
 
 <!-- ============================================================
-     WERSJA PLIKU: 1.5   (2026-09-14)
+     WERSJA PLIKU: 1.6   (2026-09-14)
      Historia:
+       1.6 – dotknięcie kafelka pokazuje wykres i historię konta zamiast
+             otwierać formularz; wpis dodaje się przyciskiem przy koncie
        1.5 – formularz wpisu schowany w panelu wysuwanym od dołu: otwiera go
              dotknięcie kafelka konta albo kafelka "dodaj konto"; ekran
              główny to teraz majątek, kafelki kont i historia
@@ -417,6 +419,26 @@
   }
   .today { color: var(--ember); font-weight: 600; font-size: 11.5px; }
 
+  /* ---------- pasek wybranego konta ---------- */
+  .pickhead {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 13px 14px 2px;
+  }
+  .pickhead .pn {
+    display: flex; align-items: center; gap: 8px; min-width: 0;
+    font-size: 15px; font-weight: 700; letter-spacing: -.015em;
+  }
+  .pickhead .pn i { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .pickhead .pn span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pickhead .pn .g { color: var(--ink-3); font-weight: 600; }
+  .mini {
+    flex-shrink: 0; padding: 9px 13px; border-radius: 9px; border: none;
+    background: var(--signal); color: var(--on-signal);
+    font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .mini svg { width: 13px; height: 13px; }
+
   /* ---------- statystyki ---------- */
   .figures { display: flex; align-items: stretch; padding: 13px 3px; }
   .fig { flex: 1; min-width: 0; padding: 0 9px; border-left: 1px solid var(--hair); text-align: left; }
@@ -663,6 +685,15 @@
       <span class="meta" id="progMeta"></span>
     </div>
     <div class="panel">
+      <div class="pickhead">
+        <span class="pn" id="progName"></span>
+        <button class="mini" id="entryBtn">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round">
+            <path d="M10 4.5v11M4.5 10h11"/>
+          </svg>
+          Zapisz stan
+        </button>
+      </div>
       <div class="figures num">
         <div class="fig"><div class="k">ostatnio</div><div class="v" id="figLast">–</div></div>
         <div class="fig"><div class="k">najwięcej</div><div class="v" id="figBest">–</div></div>
@@ -816,7 +847,7 @@
 <script>
 'use strict';
 
-var APP_VERSION = '1.5';
+var APP_VERSION = '1.6';
 
 var KEY = 'budget-entries';
 var BK = 'budget-last-backup';
@@ -1495,8 +1526,15 @@ document.getElementById('accSec').addEventListener('click', function (ev) {
   if (ev.target.closest('#addAccBtn')) { dodajKonto(); return; }
   var b = ev.target.closest('.tile');
   if (!b) return;
-  // panel otwiera się bez klawiatury — ta wychodzi dopiero przy polu kwoty
-  openSheet(b.dataset.acc);
+  active = b.dataset.acc;
+  chartSel = null;
+  render();
+  var cel = document.getElementById('progressSec');
+  if (cel.scrollIntoView) cel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+document.getElementById('entryBtn').addEventListener('click', function () {
+  if (active) openSheet(active);
 });
 
 /* ---------- panel wpisu ---------- */
@@ -1567,7 +1605,11 @@ function render() {
   var ps = document.getElementById('progressSec');
   if (last) {
     ps.classList.remove('hidden');
-    document.getElementById('progMeta').textContent = active;
+    var wl = ownerOf(active);
+    document.getElementById('progMeta').textContent = wl || '';
+    document.getElementById('progName').innerHTML =
+      '<i style="background:' + (wl ? ownerVar(wl) : 'var(--ink-3)') + '"></i>' +
+      '<span>' + nameHTML(active) + '</span>';
     document.getElementById('figLast').textContent = zl0(last.amount) + ' zł';
 
     var best = f[0];
