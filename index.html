@@ -6,8 +6,15 @@
 <title>Budżet domowy</title>
 
 <!-- ============================================================
-     WERSJA PLIKU: 1.7   (2026-09-14)
+     WERSJA PLIKU: 1.9   (2026-10-30)
      Historia:
+       1.9 – przyrost procentowy: w tym miesiącu i od początku roku na kafelku
+             majątku, procent przy każdej osobie i przy każdym miesiącu;
+             podstawą są tylko konta znane na obu końcach okresu
+       1.8 – zmiana miesięczna liczona tylko po kontach znanych na obu
+             końcach miesiąca (nowe konto nie udaje przyrostu), miesiąc bez
+             wpisów opisany zamiast zera, blokada dat z przyszłości,
+             zamykanie konta, licznik wpisów czekających na wysłanie
        1.7 – konto rozpoznawane po parze właściciel + nazwa, nie po samej
              nazwie: XTB Kasi i XTB Daniela to dwa osobne konta; pytanie
              o właściciela zawsze przed sprawdzeniem, czy konto już jest;
@@ -69,7 +76,7 @@
     /* tekst */
     --ink: #16181B;
     --ink-2: #4A4F55;
-    --ink-3: #797F86;
+    --ink-3: #6B7278;
 
     /* z sygnetu */
     --signal: #185FA5;
@@ -202,6 +209,34 @@
   .hero .change { font-size: 13px; margin: 8px 0 0; color: var(--ink-2); }
   .hero .change b { font-weight: 700; }
   .hero .prev { font-size: 12.5px; color: var(--ink-3); margin: 2px 0 0; }
+  .hero .newacc { font-size: 12px; color: var(--ink-3); margin: 2px 0 0; }
+  .rates { display: flex; gap: 9px; margin: 14px 0 0; }
+  .rate {
+    flex: 1; min-width: 0; background: var(--panel);
+    border: 1px solid var(--hair); border-radius: 10px; padding: 9px 11px 10px;
+  }
+  .rate .rk {
+    font-size: 11px; font-weight: 600; color: var(--ink-3);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rate .rp {
+    font-size: clamp(18px, 5.6vw, 22px); font-weight: 700;
+    letter-spacing: -.025em; line-height: 1.2; margin-top: 2px; white-space: nowrap;
+  }
+  .rate .rz { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+  .mrow .md small { display: block; font-size: 11px; font-weight: 600; opacity: .85; }
+  .pending {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin: 10px 0 0; padding: 5px 10px; border-radius: 7px;
+    background: var(--signal-soft); color: var(--signal);
+    font-size: 12px; font-weight: 600;
+  }
+  .closeacc {
+    display: block; width: 100%; margin: 12px 0 0; padding: 10px 0;
+    background: none; border: none; color: var(--ink-3);
+    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .mrow .mempty { font-size: 12.5px; color: var(--ink-3); font-style: italic; }
 
   .owners { display: flex; border-top: 1px solid var(--hair); }
   .ocell { flex: 1; min-width: 0; padding: 12px 13px; border-left: 1px solid var(--hair); }
@@ -260,7 +295,7 @@
   .mitem.on { background: var(--signal-soft); color: var(--signal); }
 
   .iconbtn {
-    flex-shrink: 0; width: 34px; height: 34px; border-radius: 9px;
+    flex-shrink: 0; width: 40px; height: 40px; border-radius: 9px;
     background: var(--sunk); border: 1px solid var(--rule); color: var(--ink-2);
     display: flex; align-items: center; justify-content: center; padding: 0; cursor: pointer;
   }
@@ -486,7 +521,8 @@
   .hrow .hd .who { display: block; font-size: 11px; }
   .hrow .hdl { font-size: 12.5px; font-weight: 700; flex-shrink: 0; }
   .del {
-    flex-shrink: 0; width: 30px; height: 30px; border: none; background: none;
+    flex-shrink: 0; width: 44px; height: 44px; margin: -8px -8px -8px 0;
+    border: none; background: none;
     color: var(--ink-3); display: flex; align-items: center; justify-content: center;
     padding: 0; cursor: pointer; border-radius: 8px;
   }
@@ -570,7 +606,7 @@
     text-transform: uppercase; letter-spacing: .075em;
   }
   .xbtn {
-    border: none; background: none; padding: 4px; margin: -4px;
+    border: none; background: none; padding: 13px; margin: -13px;
     color: var(--ink-3); cursor: pointer; display: flex;
   }
   .xbtn svg { width: 18px; height: 18px; }
@@ -631,8 +667,10 @@
       <div class="hero">
         <p class="cap2">Razem na dziś</p>
         <div class="total num" id="wTotal">–</div>
-        <p class="change" id="wChange"></p>
+        <div class="rates num" id="wRates"></div>
         <p class="prev" id="wPrev"></p>
+        <p class="newacc hidden" id="wNew"></p>
+        <p class="pending hidden" id="wPending"></p>
       </div>
       <div class="owners hidden" id="wOwners"></div>
       <p class="asofline" id="wAsOf"></p>
@@ -831,6 +869,7 @@
 
     <button class="save" id="saveBtn">Zapisz stan</button>
     <p class="err hidden" id="formErr"></p>
+    <button class="closeacc" id="closeAccBtn">Zamknij konto (zapisz 0 zł)</button>
   </div>
 </div>
 
@@ -851,7 +890,7 @@
 <script>
 'use strict';
 
-var APP_VERSION = '1.7';
+var APP_VERSION = '1.9';
 
 var KEY = 'budget-entries';
 var BK = 'budget-last-backup';
@@ -1077,21 +1116,74 @@ function ownerVar(own) {
   return 'var(--o' + ((i % 4) + 1) + ')';
 }
 function totalOfOwner(own, iso) {
-  var last = {};
-  live().forEach(function (e) { if (e.date <= iso && e.owner === own) last[kluczE(e)] = e.amount; });
+  var last = stanKont(iso, own);
   var sum = 0;
   Object.keys(last).forEach(function (k) { sum += last[k]; });
   return sum;
 }
 function lastOf(k) {
-  var f = live().filter(function (e) { return kluczE(e) === k; });
+  var dzis = todayISO();
+  var f = live().filter(function (e) { return kluczE(e) === k && e.date <= dzis; });
   return f.length ? f[f.length - 1] : null;
+}
+
+/* ostatnie znane saldo każdego konta na dany dzień */
+function stanKont(iso, own) {
+  var last = {};
+  live().forEach(function (e) {
+    if (e.date > iso) return;
+    if (own && e.owner !== own) return;
+    last[kluczE(e)] = e.amount;
+  });
+  return last;
+}
+
+/* Zmiana między dwoma dniami liczona TYLKO po kontach znanych na obu
+   końcach. Konto wpisane po raz pierwszy to stan otwarcia, nie przyrost —
+   inaczej dopisanie starego IKE wyglądałoby jak zarobek. */
+function zmiana(odISO, doISO, own) {
+  var a = stanKont(odISO, own), b = stanKont(doISO, own);
+  var delta = 0, nowe = 0, baza = 0;
+  Object.keys(b).forEach(function (k) {
+    if (a[k] === undefined) nowe += b[k];
+    else { delta += b[k] - a[k]; baza += a[k]; }
+  });
+  delta = Math.round(delta * 100) / 100;
+  return {
+    delta: delta,
+    nowe: Math.round(nowe * 100) / 100,
+    // procent liczony od stanu tych samych kont na początku okresu;
+    // przy podstawie zerowej lub ujemnej (sam kredyt) procent nie ma sensu
+    pct: baza > 0 ? delta / baza : null
+  };
+}
+
+/* zmiana od początku roku; gdy historia zaczyna się w tym roku,
+   punktem odniesienia jest pierwszy dzień z wpisami */
+function zmianaRoku(own) {
+  var dzis = todayISO();
+  var koniecZeszlego = (Number(dzis.slice(0, 4)) - 1) + '-12-31';
+  var daty = allDates();
+  if (!daty.length) return null;
+  var odKiedy = daty[0] <= koniecZeszlego ? koniecZeszlego : daty[0];
+  if (odKiedy >= dzis) return null;
+  var z = zmiana(odKiedy, dzis, own);
+  z.od = odKiedy === koniecZeszlego ? null : odKiedy;
+  return z;
+}
+
+function pctTxt(p) {
+  if (p === null || p === undefined || !isFinite(p)) return '';
+  var r = Math.round(p * 1000) / 10;
+  return (r > 0 ? '+' : r < 0 ? '\u2212' : '') + Math.abs(r).toFixed(1).replace('.', ',') + '%';
+}
+function kolor(v) {
+  return v > 0 ? 'var(--up)' : (v < 0 ? 'var(--down)' : 'var(--ink-2)');
 }
 
 /* suma majątku na dany dzień: ostatnia znana wartość każdego konta z datą <= dzień */
 function totalAt(iso) {
-  var last = {};
-  live().forEach(function (e) { if (e.date <= iso) last[kluczE(e)] = e.amount; });
+  var last = stanKont(iso);
   var sum = 0;
   Object.keys(last).forEach(function (k) { sum += last[k]; });
   return sum;
@@ -1117,20 +1209,30 @@ function monthlyDeltas() {
   if (!d.length) return [];
   var first = monthKey(d[0]);
   var cur = monthKey(todayISO());
+
+  var byMonth = {};
+  live().forEach(function (e) { byMonth[monthKey(e.date)] = 1; });
+
   var keys = [];
-  var k = first;
-  var guard = 0;
+  var k = first, guard = 0;
   while (k <= cur && guard < 600) { keys.push(k); k = nextMonthKey(k); guard++; }
-  var prev = null;
-  var out = keys.map(function (key) {
+
+  var out = keys.map(function (key, i) {
     var end = key === cur ? todayISO() : monthEndISO(key);
     var v = totalAt(end);
-    var delta = prev === null ? null : Math.round((v - prev) * 100) / 100;
-    prev = v;
-    return { key: key, total: v, delta: delta, current: key === cur };
+    if (i === 0) {
+      return { key: key, total: v, delta: null, nowe: 0, current: key === cur, pusty: false };
+    }
+    var prevEnd = monthEndISO(prevMonthKey(key));
+    var z = zmiana(prevEnd, end);
+    return {
+      key: key, total: v, delta: z.delta, nowe: z.nowe, pct: z.pct,
+      current: key === cur, pusty: !byMonth[key]
+    };
   });
   return out.reverse();
 }
+
 function nextMonthKey(key) {
   var p = key.split('-');
   var d = new Date(Number(p[0]), Number(p[1]), 1);
@@ -1361,17 +1463,32 @@ function renderWealth() {
   var cur = months[0];
   var prev = months[1];
 
-  var ch = document.getElementById('wChange');
-  if (cur && cur.delta !== null) {
-    var col = cur.delta > 0 ? 'var(--up)' : (cur.delta < 0 ? 'var(--down)' : 'var(--ink-2)');
-    ch.innerHTML = monthLabel(cur.key) + ': <b style="color:' + col + '">' + signed(cur.delta) + ' zł</b>';
-  } else {
-    ch.textContent = 'Pierwszy miesiąc historii — to stany otwarcia.';
-  }
+  var rok = zmianaRoku();
+  var komorka = function (etykieta, z, brak) {
+    if (!z || z.delta === null) {
+      return '<div class="rate"><div class="rk">' + etykieta + '</div>' +
+        '<div class="rp" style="color:var(--ink-3)">–</div>' +
+        '<div class="rz">' + brak + '</div></div>';
+    }
+    var p = pctTxt(z.pct);
+    return '<div class="rate"><div class="rk">' + etykieta + '</div>' +
+      '<div class="rp" style="color:' + kolor(z.delta) + '">' + (p || signed(z.delta) + ' zł') + '</div>' +
+      '<div class="rz">' + (p ? signed(z.delta) + ' zł' : '') + '</div></div>';
+  };
+  document.getElementById('wRates').innerHTML =
+    komorka(cur ? monthLabel(cur.key) : 'ten miesiąc', cur, 'stan otwarcia') +
+    komorka(rok && rok.od ? 'od ' + fmtShort(rok.od) : 'rok ' + today.slice(0, 4), rok, 'za mało historii');
+
+  var nw = document.getElementById('wNew');
+  if (cur && cur.nowe) {
+    nw.textContent = 'w tym nowe konta: ' + signed(cur.nowe) + ' zł (stan otwarcia, nie przyrost)';
+    nw.classList.remove('hidden');
+  } else { nw.classList.add('hidden'); }
 
   var pv = document.getElementById('wPrev');
   if (prev && prev.delta !== null) {
-    pv.textContent = 'poprzedni miesiąc: ' + signed(prev.delta) + ' zł';
+    pv.textContent = 'poprzedni miesiąc: ' + signed(prev.delta) + ' zł' +
+      (pctTxt(prev.pct) ? ' (' + pctTxt(prev.pct) + ')' : '');
   } else { pv.textContent = ''; }
 
   // sumy per osoba, każda ze swoją zmianą w tym miesiącu
@@ -1380,19 +1497,28 @@ function renderWealth() {
   if (os.length > 1) {
     ow.classList.remove('hidden');
     var prevEnd = monthEndISO(prevMonthKey(monthKey(today)));
-    var zmiana = !!(cur && cur.delta !== null);
+    var maZmiane = !!(cur && cur.delta !== null);
     ow.innerHTML = os.map(function (o) {
       var v = totalOfOwner(o, today);
-      var dd = Math.round((v - totalOfOwner(o, prevEnd)) * 100) / 100;
+      var zo = zmiana(prevEnd, today, o);
+      var dd = zo.delta;
       var col = dd > 0 ? 'var(--up)' : (dd < 0 ? 'var(--down)' : 'var(--ink-3)');
       return '<div class="ocell">' +
         '<div class="oname"><i style="background:' + ownerVar(o) + '"></i>' + esc(o) + '</div>' +
         '<div class="oval num">' + zl0(v) + ' zł</div>' +
         '<div class="ochg num" style="color:' + col + '">' +
-          (zmiana ? signed(dd) + ' zł' : 'stan otwarcia') + '</div>' +
+          (maZmiane ? signed(dd) + ' zł' + (pctTxt(zo.pct) ? ' · ' + pctTxt(zo.pct) : '') : 'stan otwarcia') + '</div>' +
       '</div>';
     }).join('');
   } else { ow.classList.add('hidden'); ow.innerHTML = ''; }
+
+  var czeka = niezsync();
+  var pend = document.getElementById('wPending');
+  if (czeka) {
+    pend.textContent = czeka === 1 ? '1 wpis czeka na wysłanie' :
+      czeka + (czeka < 5 ? ' wpisy czekają' : ' wpisów czeka') + ' na wysłanie';
+    pend.classList.remove('hidden');
+  } else { pend.classList.add('hidden'); }
 
   var lastDate = d[d.length - 1];
   document.getElementById('wAsOf').textContent =
@@ -1438,7 +1564,10 @@ function tileHTML(a) {
 
 function renderAccounts() {
   var sec = document.getElementById('accSec');
-  var accs = accounts().filter(function (a) { return lastOf(a); });
+  var accs = accounts().filter(function (a) {
+    var e = lastOf(a);
+    return e && e.amount !== 0;
+  });
   if (!accs.length) { sec.classList.add('hidden'); return; }
   sec.classList.remove('hidden');
 
@@ -1495,23 +1624,30 @@ function renderMonths() {
   if (!all.length) { sec.classList.add('hidden'); return; }
   sec.classList.remove('hidden');
 
+  // do średniej liczą się tylko miesiące, w których cokolwiek zapisano
+  var mierzone = all.filter(function (m) { return !m.pusty; });
   var sum = 0;
-  all.forEach(function (m) { sum += m.delta; });
-  var sr = Math.round(sum / all.length);
-  document.getElementById('monthMeta').textContent = 'średnio ' + signed(sr) + ' zł';
+  mierzone.forEach(function (m) { sum += m.delta; });
+  document.getElementById('monthMeta').textContent = mierzone.length
+    ? 'średnio ' + signed(Math.round(sum / mierzone.length)) + ' zł'
+    : '';
 
   var shown = monthsOpen ? all : all.slice(0, MAX_MONTHS);
   var szczyt = 0;
-  all.forEach(function (m) { szczyt = Math.max(szczyt, Math.abs(m.delta)); });
+  mierzone.forEach(function (m) { szczyt = Math.max(szczyt, Math.abs(m.delta)); });
 
   document.getElementById('monthRows').innerHTML = shown.map(function (m) {
     var col = m.delta > 0 ? 'var(--up)' : (m.delta < 0 ? 'var(--down)' : 'var(--flat)');
-    var szer = szczyt ? Math.max(3, Math.round(Math.abs(m.delta) / szczyt * 84)) : 0;
+    var szer = (!m.pusty && szczyt) ? Math.max(3, Math.round(Math.abs(m.delta) / szczyt * 84)) : 0;
+    var prawa = m.pusty
+      ? '<span class="md mempty">brak wpisów</span>'
+      : '<span class="md num" style="color:' + col + '">' + signed(m.delta) + ' zł' +
+          (pctTxt(m.pct) ? '<small>' + pctTxt(m.pct) + '</small>' : '') + '</span>';
     return '<div class="mrow">' +
       (szer ? '<span class="mbar" style="width:' + szer + '%;background:' + col + '"></span>' : '') +
       '<span class="mm">' + monthLabel(m.key) + (m.current ? ' <span class="today">w toku</span>' : '') + '</span>' +
       '<span class="mt num">' + zl0(m.total) + ' zł</span>' +
-      '<span class="md num" style="color:' + col + '">' + signed(m.delta) + ' zł</span>' +
+      prawa +
     '</div>';
   }).join('');
 
@@ -1542,6 +1678,20 @@ document.getElementById('accSec').addEventListener('click', function (ev) {
   render();
   var cel = document.getElementById('progressSec');
   if (cel.scrollIntoView) cel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+document.getElementById('closeAccBtn').addEventListener('click', function () {
+  if (!active) return;
+  ask({
+    title: 'Zamknąć konto?',
+    msg: 'Zapiszę dzisiaj stan 0 zł. Konto zniknie z kafelków i przestanie się liczyć do majątku, ale historia zostanie.',
+    ok: 'Zamknij konto', danger: true
+  }).then(function (v) {
+    if (!v) return;
+    setDate(shiftISO(0));
+    document.getElementById('amount').value = '0';
+    document.getElementById('saveBtn').click();
+  });
 });
 
 document.getElementById('entryBtn').addEventListener('click', function () {
@@ -1595,6 +1745,7 @@ function render() {
 
   var f = filtered();
   var last = f[f.length - 1], first = f[0];
+  document.getElementById('closeAccBtn').classList.toggle('hidden', !last || last.amount === 0);
 
   var ll = document.getElementById('lastLine');
   var rep = document.getElementById('repeatBtn');
@@ -1808,6 +1959,7 @@ document.getElementById('saveBtn').addEventListener('click', function () {
 
   if (!k) { showErr('Najpierw dodaj konto.'); return; }
   if (!date) { showErr('Wybierz datę.'); return; }
+  if (date > todayISO()) { showErr('Nie da się zapisać stanu z przyszłości.'); return; }
   if (isNaN(amount)) { showErr('Wpisz stan konta w złotych.'); return; }
   if (Math.abs(amount) > 1000000000) { showErr('To wygląda na pomyłkę — sprawdź kwotę.'); return; }
 
@@ -2174,6 +2326,15 @@ document.getElementById('ghSave').addEventListener('click', function () {
     });
 });
 
+/* wpisy zmienione po ostatniej udanej synchronizacji */
+function niezsync() {
+  if (!ghOn()) return 0;
+  var t = null;
+  try { t = localStorage.getItem(SYNCED); } catch (e) {}
+  if (!t) return entries.length;
+  return entries.filter(function (e) { return e.updated_at > t; }).length;
+}
+
 function queueSync() {
   if (!ghOn()) return;
   if (syncTimer) clearTimeout(syncTimer);
@@ -2375,6 +2536,7 @@ function wczytajKopie(txt) {
 
 /* ---------- start ---------- */
 document.getElementById('verTxt').textContent = 'Budżet domowy ' + APP_VERSION;
+document.getElementById('date').max = todayISO();
 setupStorage();
 loadGH();
 load();
