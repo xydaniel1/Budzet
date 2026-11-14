@@ -6,8 +6,12 @@
 <title>Budżet domowy</title>
 
 <!-- ============================================================
-     WERSJA PLIKU: 1.9   (2026-10-30)
+     WERSJA PLIKU: 2.0   (2026-11-14)
      Historia:
+       2.0 – udziały: pasek 100% majątku podzielony na osoby (w tym
+             wspólne) pod kafelkiem majątku; w stanie kont pasek 100%
+             każdej osoby podzielony na jej konta i procent na kafelku;
+             konta z ujemnym stanem (kredyt) nie wchodzą do podstawy procentu
        1.9 – przyrost procentowy: w tym miesiącu i od początku roku na kafelku
              majątku, procent przy każdej osobie i przy każdym miesiącu;
              podstawą są tylko konta znane na obu końcach okresu
@@ -256,6 +260,36 @@
     font-size: 11.5px; color: var(--ink-3); margin: 0;
     padding: 10px 15px; border-top: 1px solid var(--hair);
   }
+
+  /* ---------- udziały (pasek 100%) ---------- */
+  .share { padding: 12px 15px 13px; border-top: 1px solid var(--hair); }
+  .share .sk {
+    display: flex; justify-content: space-between; gap: 10px;
+    font-size: 10.5px; font-weight: 600; color: var(--ink-3); margin: 0 0 7px;
+    text-transform: uppercase; letter-spacing: .07em;
+  }
+  .share .sk span:last-child { text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .sbar {
+    display: flex; gap: 2px; height: 28px;
+    border-radius: 8px; overflow: hidden; background: var(--sunk);
+  }
+  .sbar span {
+    display: flex; align-items: center; justify-content: center; min-width: 0;
+    color: var(--panel); font-size: 12px; font-weight: 700;
+    white-space: nowrap; overflow: hidden;
+  }
+  .sleg {
+    display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0;
+    font-size: 12px; color: var(--ink-2);
+  }
+  .sleg span { display: flex; align-items: center; gap: 6px; }
+  .sleg i { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .sleg b { font-weight: 700; color: var(--ink); }
+  .abar {
+    display: flex; gap: 2px; height: 6px; margin: 0 3px 9px;
+    border-radius: 3px; overflow: hidden; background: var(--sunk);
+  }
+  .tile .tp { font-size: 11.5px; font-weight: 700; color: var(--ink-3); margin-left: 5px; letter-spacing: 0; }
 
   /* ---------- formularz ---------- */
   .compose { padding: 14px 15px 15px; }
@@ -673,6 +707,7 @@
         <p class="pending hidden" id="wPending"></p>
       </div>
       <div class="owners hidden" id="wOwners"></div>
+      <div class="share hidden" id="wShare"></div>
       <p class="asofline" id="wAsOf"></p>
       <div class="ranges hidden" id="wRanges"></div>
       <div class="chartbox hidden" id="wChart"></div>
@@ -890,7 +925,7 @@
 <script>
 'use strict';
 
-var APP_VERSION = '1.9';
+var APP_VERSION = '2.0';
 
 var KEY = 'budget-entries';
 var BK = 'budget-last-backup';
@@ -1052,16 +1087,16 @@ function zl(n) {
   var r = Math.round(Math.abs(n) * 100) / 100;
   var whole = Math.floor(r);
   var cents = Math.round((r - whole) * 100);
-  var s = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
+  var s = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   if (cents) s += ',' + (cents < 10 ? '0' + cents : cents);
-  return (neg ? '\u2212' : '') + s;
+  return (neg ? '−' : '') + s;
 }
 function zl0(n) {
   var neg = n < 0;
-  var s = String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00A0');
-  return (neg ? '\u2212' : '') + s;
+  var s = String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return (neg ? '−' : '') + s;
 }
-function signed(n) { return (n > 0 ? '+' : n < 0 ? '\u2212' : '') + zl0(Math.abs(n)); }
+function signed(n) { return (n > 0 ? '+' : n < 0 ? '−' : '') + zl0(Math.abs(n)); }
 function dec1(n) {
   var r = Math.round(n * 10) / 10;
   return String(r).replace('.', ',');
@@ -1074,7 +1109,7 @@ function zlAxis(v) {
   return String(Math.round(v));
 }
 function parseAmount(txt) {
-  var s = String(txt).replace(/\s|\u00A0/g, '').replace(',', '.');
+  var s = String(txt).replace(/\s| /g, '').replace(',', '.');
   if (!/^-?\d*\.?\d*$/.test(s) || s === '' || s === '-' || s === '.') return NaN;
   return parseFloat(s);
 }
@@ -1138,6 +1173,22 @@ function stanKont(iso, own) {
   return last;
 }
 
+/* Udziały liczone tylko z kont na plusie. Kredyt ujemny w podstawie
+   dałby procenty ponad 100 albo ujemne, a to nic nie mówi. */
+function dodatnie(stany) {
+  var sum = 0;
+  Object.keys(stany).forEach(function (k) { if (stany[k] > 0) sum += stany[k]; });
+  return sum;
+}
+function maDlug(stany) {
+  return Object.keys(stany).some(function (k) { return stany[k] < 0; });
+}
+function pctInt(v, baza) {
+  if (!(baza > 0) || !(v > 0)) return '';
+  var p = v / baza * 100;
+  return (p < 1 ? '<1' : String(Math.round(p))) + '%';
+}
+
 /* Zmiana między dwoma dniami liczona TYLKO po kontach znanych na obu
    końcach. Konto wpisane po raz pierwszy to stan otwarcia, nie przyrost —
    inaczej dopisanie starego IKE wyglądałoby jak zarobek. */
@@ -1175,7 +1226,7 @@ function zmianaRoku(own) {
 function pctTxt(p) {
   if (p === null || p === undefined || !isFinite(p)) return '';
   var r = Math.round(p * 1000) / 10;
-  return (r > 0 ? '+' : r < 0 ? '\u2212' : '') + Math.abs(r).toFixed(1).replace('.', ',') + '%';
+  return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(1).replace('.', ',') + '%';
 }
 function kolor(v) {
   return v > 0 ? 'var(--up)' : (v < 0 ? 'var(--down)' : 'var(--ink-2)');
@@ -1448,6 +1499,40 @@ function drawChart(data, sel) {
   return s;
 }
 
+/* ---------- widok: udział osób w majątku ---------- */
+function renderShare() {
+  var box = document.getElementById('wShare');
+  var today = todayISO();
+  var os = owners().map(function (o) {
+    var st = stanKont(today, o);
+    return { o: o, v: dodatnie(st), dlug: maDlug(st) };
+  }).filter(function (x) { return x.v > 0; });
+
+  if (os.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  box.classList.remove('hidden');
+
+  os.sort(function (a, b) { return b.v - a.v; });
+  var baza = 0, dlug = false;
+  os.forEach(function (x) { baza += x.v; if (x.dlug) dlug = true; });
+
+  var bar = os.map(function (x) {
+    var p = x.v / baza * 100;
+    return '<span style="flex:' + x.v + ' 1 0;background:' + ownerVar(x.o) + '" title="' +
+      esc(x.o) + ': ' + zl0(x.v) + ' zł">' + (p >= 12 ? pctInt(x.v, baza) : '') + '</span>';
+  }).join('');
+
+  var leg = os.map(function (x) {
+    return '<span><i style="background:' + ownerVar(x.o) + '"></i>' + esc(x.o) +
+      ' <b class="num">' + pctInt(x.v, baza) + '</b></span>';
+  }).join('');
+
+  box.innerHTML =
+    '<div class="sk"><span>Udział w majątku</span>' +
+      (dlug ? '<span>bez kredytów</span>' : '') + '</div>' +
+    '<div class="sbar num">' + bar + '</div>' +
+    '<div class="sleg">' + leg + '</div>';
+}
+
 /* ---------- widok: majątek ---------- */
 function renderWealth() {
   var sec = document.getElementById('wealthSec');
@@ -1512,6 +1597,8 @@ function renderWealth() {
     }).join('');
   } else { ow.classList.add('hidden'); ow.innerHTML = ''; }
 
+  renderShare();
+
   var czeka = niezsync();
   var pend = document.getElementById('wPending');
   if (czeka) {
@@ -1544,18 +1631,24 @@ function renderWealth() {
 }
 
 /* ---------- widok: stan kont (kafelki) ---------- */
-function tileHTML(a) {
+/* odcienie jednej barwy osoby dla kolejnych kont w jej pasku */
+var ODCIENIE = [1, .72, .52, .36, .24];
+
+function tileHTML(a, baza, odcien) {
   var e = lastOf(a);
   var dd = deltaOf(a, e.date);
   var dt = deltaText(dd);
   var parts = splitName(nazwaZ(a));
   var stary = dayNum(todayISO()) - dayNum(e.date) > 60;
-  var barwa = ownerOf(a) ? ownerVar(ownerOf(a)) : 'var(--rule)';
-  return '<button class="tile' + (a === active ? ' on' : '') + '" data-acc="' + esc(a) + '"' +
-    (a === active ? '' : ' style="border-left-color:' + barwa + '"') + '>' +
+  var barwa = ownerOf(a) ? ownerVar(ownerOf(a)) : 'var(--ink-3)';
+  var p = pctInt(e.amount, baza);
+  var lewa = a === active ? '' :
+    ' style="border-left-color:' + barwa + (odcien !== null && odcien < 1
+      ? ';border-left-color:color-mix(in srgb, ' + barwa + ' ' + Math.round(odcien * 100) + '%, transparent)' : '') + '"';
+  return '<button class="tile' + (a === active ? ' on' : '') + '" data-acc="' + esc(a) + '"' + lewa + '>' +
     (parts.group ? '<span class="tg">' + esc(parts.group) + '</span>' : '') +
     '<span class="tn">' + esc(parts.rest) + '</span>' +
-    '<span class="tv num">' + zl0(e.amount) + ' zł</span>' +
+    '<span class="tv num">' + zl0(e.amount) + ' zł' + (p ? '<span class="tp">' + p + '</span>' : '') + '</span>' +
     '<span class="td num' + (stary ? ' stale' : '') + '">' +
       (dt ? '<b style="color:' + progVar(dd) + '">' + dt + '</b> · ' : '') + agoText(e.date) +
     '</span>' +
@@ -1598,16 +1691,35 @@ function renderAccounts() {
   var jedna = ord.length === 1;
   document.getElementById('accBody').innerHTML = ord.map(function (o) {
     var list = byOwner[o].slice().sort(function (x, y) { return lastOf(y).amount - lastOf(x).amount; });
-    var sum = 0;
-    list.forEach(function (a) { sum += lastOf(a).amount; });
+    var sum = 0, baza = 0;
+    list.forEach(function (a) {
+      var v = lastOf(a).amount;
+      sum += v;
+      if (v > 0) baza += v;
+    });
+    var barwa = o ? ownerVar(o) : 'var(--ink-3)';
+
+    // pasek 100% osoby: kolejne konta (tylko na plusie) w odcieniach jej barwy
+    var plus = list.filter(function (a) { return lastOf(a).amount > 0; });
+    var odcien = {};
+    plus.forEach(function (a, i) { odcien[a] = ODCIENIE[Math.min(i, ODCIENIE.length - 1)]; });
+    var pasek = plus.length > 1
+      ? '<div class="abar">' + plus.map(function (a) {
+          return '<span style="flex:' + lastOf(a).amount + ' 1 0;background:' + barwa +
+            ';opacity:' + odcien[a] + '"></span>';
+        }).join('') + '</div>'
+      : '';
+
     var head = jedna && !o ? '' :
       '<div class="ohead">' +
-        '<span class="on"><i style="background:' + (o ? ownerVar(o) : 'var(--ink-3)') + '"></i>' +
+        '<span class="on"><i style="background:' + barwa + '"></i>' +
           esc(o || 'Bez właściciela') + '</span>' +
         '<span class="ot num">' + zl0(sum) + ' zł</span>' +
       '</div>';
-    return '<div class="ogroup">' + head +
-      '<div class="tiles">' + list.map(tileHTML).join('') + '</div></div>';
+    return '<div class="ogroup">' + head + pasek +
+      '<div class="tiles">' + list.map(function (a) {
+        return tileHTML(a, plus.length > 1 ? baza : 0, odcien[a] === undefined ? null : odcien[a]);
+      }).join('') + '</div></div>';
   }).join('') +
   '<div class="tiles" style="margin-top:9px">' +
     '<button class="addacc" id="addAccBtn">' +
@@ -2421,7 +2533,7 @@ function exportText() {
   out += 'Majątek razem: ' + zl(totalAt(todayISO())) + ' zł\n\n';
   Object.keys(groups).sort(function (a, b) { return nazwaZ(a).localeCompare(nazwaZ(b), 'pl'); }).forEach(function (k) {
     var own = wlascicielZ(k);
-    out += nazwaZ(k) + (own ? '  \u00B7 ' + own : '') + '\n';
+    out += nazwaZ(k) + (own ? '  · ' + own : '') + '\n';
     groups[k].forEach(function (e) {
       out += '  ' + e.date + '  ' + zl(e.amount) + ' zł' + (e.author ? '  (' + e.author + ')' : '') + '\n';
     });
