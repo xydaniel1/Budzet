@@ -6,8 +6,12 @@
 <title>Budżet domowy</title>
 
 <!-- ============================================================
-     WERSJA PLIKU: 2.1   (2026-11-14)
+     WERSJA PLIKU: 2.2   (2026-11-14)
      Historia:
+       2.2 – pasek oszczędności łączy konta o tej samej nazwie bez względu
+             na właściciela: XTB Kasi i XTB Daniela to jeden odcinek „XTB”,
+             a pod nim widać, ile ma w nim każda osoba; ta sama nazwa ma
+             ten sam kolor wszędzie
        2.1 – udziały pokazują konta, nie osoby: każde konto ma własny kolor
              z palety 8 barw sprawdzonej pod daltonizm (ten sam w pasku
              oszczędności, w pasku osoby i na kafelku); procenty w paskach
@@ -955,7 +959,7 @@
 <script>
 'use strict';
 
-var APP_VERSION = '2.1';
+var APP_VERSION = '2.2';
 
 var KEY = 'budget-entries';
 var BK = 'budget-last-backup';
@@ -1208,26 +1212,28 @@ function pctInt(v, baza) {
   return (p < 1 ? '<1' : String(Math.round(p))) + '%';
 }
 
-/* Kolor konta zależy od kolejności, w jakiej konta pojawiły się w historii,
-   a nie od ich wielkości — dzięki temu konto nie zmienia barwy, gdy inne
-   urośnie. Paleta ma 8 barw; dziewiąte i dalsze konto dostaje szary. */
+/* Rodzaj konta: nazwa bez prefiksu grupy, bez wielkości liter.
+   „Broker - XTB” Kasi i Daniela to ten sam rodzaj „xtb”. */
+function rodzajKonta(k) { return splitName(nazwaZ(k)).rest.trim().toLowerCase(); }
+
+/* Kolor należy do rodzaju konta i zależy od kolejności, w jakiej rodzaje
+   pojawiły się w historii, a nie od wielkości — dzięki temu XTB nie zmienia
+   barwy, gdy inne konto urośnie. Paleta ma 8 barw; dalsze rodzaje są szare. */
 var SLOTY = 8;
 function kolejnoscKont() {
-  var pierwszy = {};
+  var pierwszy = {}, idPierwszy = {};
   live().forEach(function (e) {
-    var k = kluczE(e);
-    if (!pierwszy[k] || e.date < pierwszy[k] ||
-        (e.date === pierwszy[k] && e.id < (pierwszy[k + '#'] || ''))) {
-      pierwszy[k] = e.date; pierwszy[k + '#'] = e.id;
+    var r = rodzajKonta(kluczE(e));
+    if (!pierwszy[r] || e.date < pierwszy[r] || (e.date === pierwszy[r] && e.id < idPierwszy[r])) {
+      pierwszy[r] = e.date; idPierwszy[r] = e.id;
     }
   });
-  return Object.keys(pierwszy).filter(function (k) { return k.slice(-1) !== '#'; })
-    .sort(function (a, b) {
-      return pierwszy[a] < pierwszy[b] ? -1 : pierwszy[a] > pierwszy[b] ? 1 : a.localeCompare(b, 'pl');
-    });
+  return Object.keys(pierwszy).sort(function (a, b) {
+    return pierwszy[a] < pierwszy[b] ? -1 : pierwszy[a] > pierwszy[b] ? 1 : a.localeCompare(b, 'pl');
+  });
 }
 function slotKonta(k, kol) {
-  var i = (kol || kolejnoscKont()).indexOf(k);
+  var i = (kol || kolejnoscKont()).indexOf(rodzajKonta(k));
   return i >= 0 && i < SLOTY ? i : -1;
 }
 function kolorSlotu(i) { return i >= 0 ? 'var(--s' + (i + 1) + ')' : 'var(--s-inne)'; }
@@ -1558,42 +1564,53 @@ function drawChart(data, sel) {
   return s;
 }
 
-/* ---------- widok: udział kont w majątku ---------- */
+/* ---------- widok: gdzie są oszczędności (wspólny worek) ---------- */
 function renderShare() {
   var box = document.getElementById('wShare');
   var today = todayISO();
   var stany = stanKont(today);
   var kol = kolejnoscKont();
 
-  var plus = Object.keys(stany).filter(function (k) { return stany[k] > 0; });
   var dlug = Object.keys(stany).some(function (k) { return stany[k] < 0; });
-  if (plus.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+  // konta na plusie łączymy po rodzaju: XTB Kasi + XTB Daniela = XTB
+  var worki = {}, baza = 0;
+  Object.keys(stany).forEach(function (k) {
+    var v = stany[k];
+    if (!(v > 0)) return;
+    baza += v;
+    var r = rodzajKonta(k);
+    var w = worki[r] || (worki[r] = { nazwa: splitName(nazwaZ(k)).rest, v: 0, slot: slotKonta(k, kol), osoby: [] });
+    w.v += v;
+    w.osoby.push({ kto: wlascicielZ(k) || 'bez właściciela', v: v });
+  });
+
+  var lista = Object.keys(worki).map(function (r) { return worki[r]; });
+  if (lista.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
   box.classList.remove('hidden');
 
-  var baza = 0;
-  plus.forEach(function (k) { baza += stany[k]; });
-
-  // konta poza paletą składamy w jedno „Pozostałe”
-  var odcinki = [], inne = 0, ileInnych = 0;
-  plus.forEach(function (k) {
-    var sl = slotKonta(k, kol);
-    if (sl < 0) { inne += stany[k]; ileInnych++; return; }
-    var nz = splitName(nazwaZ(k));
-    odcinki.push({ klucz: k, nazwa: nz.rest, grupa: nz.group, wl: wlascicielZ(k), v: stany[k], slot: sl });
-  });
+  // rodzaje poza paletą składamy w jedno „Pozostałe”
+  var odcinki = lista.filter(function (o) { return o.slot >= 0; });
+  var reszta = lista.filter(function (o) { return o.slot < 0; });
+  if (reszta.length) {
+    var inne = { nazwa: 'Pozostałe (' + reszta.length + ')', v: 0, slot: -1, osoby: [] };
+    reszta.forEach(function (o) { inne.v += o.v; });
+    odcinki.push(inne);
+  }
   odcinki.sort(function (a, b) { return b.v - a.v; });
-  if (inne > 0) odcinki.push({ klucz: '', nazwa: 'Pozostałe (' + ileInnych + ')', grupa: '', wl: '', v: inne, slot: -1 });
-
 
   box.innerHTML =
     '<div class="sk"><span>Gdzie są oszczędności</span>' +
       (dlug ? '<span>bez kredytów</span>' : '') + '</div>' +
     paskiHTML(odcinki, baza) +
     '<div class="srows">' + odcinki.map(function (o) {
-      var opis = [o.wl, o.grupa].filter(Boolean).join(' · ');
+      var kto = o.osoby.slice().sort(function (a, b) { return b.v - a.v; });
+      var opis = kto.length > 1
+        ? kto.map(function (x) { return esc(x.kto) + ' ' + zl0(x.v); }).join(' · ')
+        : (kto.length ? esc(kto[0].kto) : '');
       return '<div class="srow">' +
         '<span class="sw" style="background:' + kolorSlotu(o.slot) + '"></span>' +
-        '<span class="sn">' + esc(o.nazwa) + (opis ? '<small>' + esc(opis) + '</small>' : '') + '</span>' +
+        '<span class="sn">' + esc(o.nazwa) + (opis ? '<small class="num">' + opis + '</small>' : '') + '</span>' +
         '<span class="sz num">' + zl0(o.v) + ' zł</span>' +
         '<span class="sp num">' + pctInt(o.v, baza) + '</span>' +
       '</div>';
