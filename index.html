@@ -6,8 +6,14 @@
 <title>Budżet domowy</title>
 
 <!-- ============================================================
-     WERSJA PLIKU: 2.0   (2026-11-14)
+     WERSJA PLIKU: 2.1   (2026-11-14)
      Historia:
+       2.1 – udziały pokazują konta, nie osoby: każde konto ma własny kolor
+             z palety 8 barw sprawdzonej pod daltonizm (ten sam w pasku
+             oszczędności, w pasku osoby i na kafelku); procenty w paskach
+             i na kafelkach, lista kont z procentem i kwotą, udział osoby
+             przy jej nazwie; wszędzie od największego konta; osoby bez
+             własnej barwy, żeby kolor znaczył tylko konto
        2.0 – udziały: pasek 100% majątku podzielony na osoby (w tym
              wspólne) pod kafelkiem majątku; w stanie kont pasek 100%
              każdej osoby podzielony na jej konta i procent na kafelku;
@@ -100,6 +106,16 @@
     --o3: #2F8F5F;
     --o4: #6B4BB0;
 
+    /* barwa przypisana do konta: 8 barw w stałej kolejności,
+       sprawdzone pod daltonizm dla sąsiednich odcinków paska */
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+    --s-inne: #9A9A94;
+    /* napis na odcinku: biały albo prawie czarny, który da większy kontrast */
+    --t1: #FFFFFF; --t2: #111214; --t3: #111214; --t4: #111214;
+    --t5: #111214; --t6: #FFFFFF; --t7: #FFFFFF; --t8: #111214;
+    --t-inne: #111214;
+
     --shadow: 0 1px 3px rgba(20, 22, 26, .07);
   }
 
@@ -129,6 +145,13 @@
       --o2: #E97A4E;
       --o3: #46B37D;
       --o4: #A78BE8;
+
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+      --s-inne: #6E6E68;
+      --t1: #111214; --t2: #111214; --t3: #111214; --t4: #111214;
+      --t5: #111214; --t6: #111214; --t7: #111214; --t8: #111214;
+      --t-inne: #FFFFFF;
 
       --shadow: none;
     }
@@ -252,7 +275,7 @@
   }
   .ocell .oname i { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
   .ocell .oval {
-    font-size: clamp(15px, 4.9vw, 19px); font-weight: 700;
+    font-size: clamp(14px, 3.9vw, 19px); font-weight: 700;
     letter-spacing: -.025em; margin-top: 3px; white-space: nowrap;
   }
   .ocell .ochg { font-size: 11px; margin-top: 1px; white-space: nowrap; }
@@ -262,34 +285,41 @@
   }
 
   /* ---------- udziały (pasek 100%) ---------- */
-  .share { padding: 12px 15px 13px; border-top: 1px solid var(--hair); }
-  .share .sk {
-    display: flex; justify-content: space-between; gap: 10px;
-    font-size: 10.5px; font-weight: 600; color: var(--ink-3); margin: 0 0 7px;
+  .share { padding: 13px 15px 4px; border-top: 1px solid var(--hair); }
+  .sk {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    font-size: 10.5px; font-weight: 600; color: var(--ink-3); margin: 0 0 8px;
     text-transform: uppercase; letter-spacing: .07em;
   }
-  .share .sk span:last-child { text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .sk span:last-child { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11.5px; }
   .sbar {
     display: flex; gap: 2px; height: 28px;
-    border-radius: 8px; overflow: hidden; background: var(--sunk);
+    border-radius: 7px; overflow: hidden; background: var(--sunk);
   }
   .sbar span {
-    display: flex; align-items: center; justify-content: center; min-width: 0;
-    color: var(--panel); font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; min-width: 4px;
+    font-size: 12px; font-weight: 700;
     white-space: nowrap; overflow: hidden;
   }
-  .sleg {
-    display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0;
-    font-size: 12px; color: var(--ink-2);
+  .sbar.thin { height: 24px; margin: 0 0 10px; }
+  .sbar.thin span { font-size: 11.5px; }
+  .srows { margin-top: 10px; }
+  .srow {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 0; border-top: 1px solid var(--hair);
   }
-  .sleg span { display: flex; align-items: center; gap: 6px; }
-  .sleg i { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-  .sleg b { font-weight: 700; color: var(--ink); }
-  .abar {
-    display: flex; gap: 2px; height: 6px; margin: 0 3px 9px;
-    border-radius: 3px; overflow: hidden; background: var(--sunk);
+  .srow .sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  .srow .sn { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; line-height: 1.25; }
+  .srow .sn small { display: block; font-size: 11px; font-weight: 500; color: var(--ink-3); }
+  .srow .sp { font-size: 14px; font-weight: 700; min-width: 42px; text-align: right; }
+  .srow .sz { font-size: 12px; color: var(--ink-3); min-width: 82px; text-align: right; }
+  .ohead .op { color: var(--ink-3); font-weight: 600; margin-left: 2px; }
+  .tile { position: relative; }
+  .tile .tp {
+    position: absolute; top: 10px; right: 11px;
+    font-size: 13.5px; font-weight: 700; color: var(--ink); letter-spacing: -.01em;
   }
-  .tile .tp { font-size: 11.5px; font-weight: 700; color: var(--ink-3); margin-left: 5px; letter-spacing: 0; }
+  .tile.hasp .tg, .tile.hasp .tn { padding-right: 40px; }
 
   /* ---------- formularz ---------- */
   .compose { padding: 14px 15px 15px; }
@@ -453,11 +483,11 @@
   .tile {
     display: block; text-align: left; min-width: 0;
     background: var(--panel); border: 1px solid var(--rule);
-    border-left: 3px solid var(--rule);
+    border-left: 5px solid var(--rule);
     border-radius: 12px; box-shadow: var(--shadow);
     padding: 11px 12px; font: inherit; color: var(--ink); cursor: pointer;
   }
-  .tile.on { border-color: var(--signal); border-left-color: var(--signal); background: var(--signal-soft); }
+  .tile.on { border-color: var(--ink-3); background: var(--sunk); box-shadow: inset 0 0 0 1px var(--ink-3); }
   .tile .tg {
     display: block; font-size: 10.5px; font-weight: 600; color: var(--ink-3);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -925,7 +955,7 @@
 <script>
 'use strict';
 
-var APP_VERSION = '2.0';
+var APP_VERSION = '2.1';
 
 var KEY = 'budget-entries';
 var BK = 'budget-last-backup';
@@ -1144,12 +1174,9 @@ function owners() {
   if (pendingOwner && !seen[pendingOwner]) out.push(pendingOwner);
   return out.sort(function (a, b) { return a.localeCompare(b, 'pl'); });
 }
-function ownerVar(own) {
-  var os = owners();
-  var i = os.indexOf(own);
-  if (i < 0) i = 0;
-  return 'var(--o' + ((i % 4) + 1) + ')';
-}
+/* Od 2.1 barwa należy do konta, nie do osoby — inaczej ten sam kolor
+   znaczyłby raz „Kasia”, a raz „XTB Daniela”. Osoby mają neutralny znacznik. */
+function ownerVar(own) { return 'var(--ink-3)'; }
 function totalOfOwner(own, iso) {
   var last = stanKont(iso, own);
   var sum = 0;
@@ -1175,18 +1202,50 @@ function stanKont(iso, own) {
 
 /* Udziały liczone tylko z kont na plusie. Kredyt ujemny w podstawie
    dałby procenty ponad 100 albo ujemne, a to nic nie mówi. */
-function dodatnie(stany) {
-  var sum = 0;
-  Object.keys(stany).forEach(function (k) { if (stany[k] > 0) sum += stany[k]; });
-  return sum;
-}
-function maDlug(stany) {
-  return Object.keys(stany).some(function (k) { return stany[k] < 0; });
-}
 function pctInt(v, baza) {
   if (!(baza > 0) || !(v > 0)) return '';
   var p = v / baza * 100;
   return (p < 1 ? '<1' : String(Math.round(p))) + '%';
+}
+
+/* Kolor konta zależy od kolejności, w jakiej konta pojawiły się w historii,
+   a nie od ich wielkości — dzięki temu konto nie zmienia barwy, gdy inne
+   urośnie. Paleta ma 8 barw; dziewiąte i dalsze konto dostaje szary. */
+var SLOTY = 8;
+function kolejnoscKont() {
+  var pierwszy = {};
+  live().forEach(function (e) {
+    var k = kluczE(e);
+    if (!pierwszy[k] || e.date < pierwszy[k] ||
+        (e.date === pierwszy[k] && e.id < (pierwszy[k + '#'] || ''))) {
+      pierwszy[k] = e.date; pierwszy[k + '#'] = e.id;
+    }
+  });
+  return Object.keys(pierwszy).filter(function (k) { return k.slice(-1) !== '#'; })
+    .sort(function (a, b) {
+      return pierwszy[a] < pierwszy[b] ? -1 : pierwszy[a] > pierwszy[b] ? 1 : a.localeCompare(b, 'pl');
+    });
+}
+function slotKonta(k, kol) {
+  var i = (kol || kolejnoscKont()).indexOf(k);
+  return i >= 0 && i < SLOTY ? i : -1;
+}
+function kolorSlotu(i) { return i >= 0 ? 'var(--s' + (i + 1) + ')' : 'var(--s-inne)'; }
+function napisSlotu(i) { return i >= 0 ? 'var(--t' + (i + 1) + ')' : 'var(--t-inne)'; }
+
+/* odcinki paska 100%: [{nazwa, v, slot}], od największego — w tej samej
+   kolejności co lista i kafelki pod spodem. Każdy odcinek ma też procent
+   i nazwę w liście, więc kolor nie jest jedyną wskazówką. */
+function paskiHTML(odcinki, baza, klasa) {
+  return '<div class="sbar num' + (klasa ? ' ' + klasa : '') + '" role="img" aria-label="' +
+    esc(odcinki.map(function (o) { return o.nazwa + ' ' + pctInt(o.v, baza); }).join(', ')) + '">' +
+    odcinki.map(function (o) {
+      var p = o.v / baza * 100;
+      return '<span style="flex:' + o.v + ' 1 0;background:' + kolorSlotu(o.slot) +
+        ';color:' + napisSlotu(o.slot) + '" title="' +
+        esc(o.nazwa) + ': ' + zl0(o.v) + ' zł (' + pctInt(o.v, baza) + ')">' +
+        (p >= 11 ? pctInt(o.v, baza) : '') + '</span>';
+    }).join('') + '</div>';
 }
 
 /* Zmiana między dwoma dniami liczona TYLKO po kontach znanych na obu
@@ -1499,38 +1558,46 @@ function drawChart(data, sel) {
   return s;
 }
 
-/* ---------- widok: udział osób w majątku ---------- */
+/* ---------- widok: udział kont w majątku ---------- */
 function renderShare() {
   var box = document.getElementById('wShare');
   var today = todayISO();
-  var os = owners().map(function (o) {
-    var st = stanKont(today, o);
-    return { o: o, v: dodatnie(st), dlug: maDlug(st) };
-  }).filter(function (x) { return x.v > 0; });
+  var stany = stanKont(today);
+  var kol = kolejnoscKont();
 
-  if (os.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+  var plus = Object.keys(stany).filter(function (k) { return stany[k] > 0; });
+  var dlug = Object.keys(stany).some(function (k) { return stany[k] < 0; });
+  if (plus.length < 2) { box.classList.add('hidden'); box.innerHTML = ''; return; }
   box.classList.remove('hidden');
 
-  os.sort(function (a, b) { return b.v - a.v; });
-  var baza = 0, dlug = false;
-  os.forEach(function (x) { baza += x.v; if (x.dlug) dlug = true; });
+  var baza = 0;
+  plus.forEach(function (k) { baza += stany[k]; });
 
-  var bar = os.map(function (x) {
-    var p = x.v / baza * 100;
-    return '<span style="flex:' + x.v + ' 1 0;background:' + ownerVar(x.o) + '" title="' +
-      esc(x.o) + ': ' + zl0(x.v) + ' zł">' + (p >= 12 ? pctInt(x.v, baza) : '') + '</span>';
-  }).join('');
+  // konta poza paletą składamy w jedno „Pozostałe”
+  var odcinki = [], inne = 0, ileInnych = 0;
+  plus.forEach(function (k) {
+    var sl = slotKonta(k, kol);
+    if (sl < 0) { inne += stany[k]; ileInnych++; return; }
+    var nz = splitName(nazwaZ(k));
+    odcinki.push({ klucz: k, nazwa: nz.rest, grupa: nz.group, wl: wlascicielZ(k), v: stany[k], slot: sl });
+  });
+  odcinki.sort(function (a, b) { return b.v - a.v; });
+  if (inne > 0) odcinki.push({ klucz: '', nazwa: 'Pozostałe (' + ileInnych + ')', grupa: '', wl: '', v: inne, slot: -1 });
 
-  var leg = os.map(function (x) {
-    return '<span><i style="background:' + ownerVar(x.o) + '"></i>' + esc(x.o) +
-      ' <b class="num">' + pctInt(x.v, baza) + '</b></span>';
-  }).join('');
 
   box.innerHTML =
-    '<div class="sk"><span>Udział w majątku</span>' +
+    '<div class="sk"><span>Gdzie są oszczędności</span>' +
       (dlug ? '<span>bez kredytów</span>' : '') + '</div>' +
-    '<div class="sbar num">' + bar + '</div>' +
-    '<div class="sleg">' + leg + '</div>';
+    paskiHTML(odcinki, baza) +
+    '<div class="srows">' + odcinki.map(function (o) {
+      var opis = [o.wl, o.grupa].filter(Boolean).join(' · ');
+      return '<div class="srow">' +
+        '<span class="sw" style="background:' + kolorSlotu(o.slot) + '"></span>' +
+        '<span class="sn">' + esc(o.nazwa) + (opis ? '<small>' + esc(opis) + '</small>' : '') + '</span>' +
+        '<span class="sz num">' + zl0(o.v) + ' zł</span>' +
+        '<span class="sp num">' + pctInt(o.v, baza) + '</span>' +
+      '</div>';
+    }).join('') + '</div>';
 }
 
 /* ---------- widok: majątek ---------- */
@@ -1631,24 +1698,20 @@ function renderWealth() {
 }
 
 /* ---------- widok: stan kont (kafelki) ---------- */
-/* odcienie jednej barwy osoby dla kolejnych kont w jej pasku */
-var ODCIENIE = [1, .72, .52, .36, .24];
-
-function tileHTML(a, baza, odcien) {
+function tileHTML(a, baza, kol) {
   var e = lastOf(a);
   var dd = deltaOf(a, e.date);
   var dt = deltaText(dd);
   var parts = splitName(nazwaZ(a));
   var stary = dayNum(todayISO()) - dayNum(e.date) > 60;
-  var barwa = ownerOf(a) ? ownerVar(ownerOf(a)) : 'var(--ink-3)';
   var p = pctInt(e.amount, baza);
-  var lewa = a === active ? '' :
-    ' style="border-left-color:' + barwa + (odcien !== null && odcien < 1
-      ? ';border-left-color:color-mix(in srgb, ' + barwa + ' ' + Math.round(odcien * 100) + '%, transparent)' : '') + '"';
-  return '<button class="tile' + (a === active ? ' on' : '') + '" data-acc="' + esc(a) + '"' + lewa + '>' +
+  var barwa = e.amount > 0 ? kolorSlotu(slotKonta(a, kol)) : 'var(--rule)';
+  return '<button class="tile' + (a === active ? ' on' : '') + (p ? ' hasp' : '') + '" data-acc="' + esc(a) + '"' +
+    ' style="border-left-color:' + barwa + '">' +
+    (p ? '<span class="tp num">' + p + '</span>' : '') +
     (parts.group ? '<span class="tg">' + esc(parts.group) + '</span>' : '') +
     '<span class="tn">' + esc(parts.rest) + '</span>' +
-    '<span class="tv num">' + zl0(e.amount) + ' zł' + (p ? '<span class="tp">' + p + '</span>' : '') + '</span>' +
+    '<span class="tv num">' + zl0(e.amount) + ' zł</span>' +
     '<span class="td num' + (stary ? ' stale' : '') + '">' +
       (dt ? '<b style="color:' + progVar(dd) + '">' + dt + '</b> · ' : '') + agoText(e.date) +
     '</span>' +
@@ -1676,6 +1739,10 @@ function renderAccounts() {
   document.getElementById('accBody').classList.toggle('hidden', !accOpen);
   if (!accOpen) return;
 
+  var kol = kolejnoscKont();
+  var majatekPlus = 0;
+  accs.forEach(function (a) { var v = lastOf(a).amount; if (v > 0) majatekPlus += v; });
+
   var byOwner = {}, ord = [];
   accs.forEach(function (a) {
     var o = ownerOf(a) || '';
@@ -1697,28 +1764,26 @@ function renderAccounts() {
       sum += v;
       if (v > 0) baza += v;
     });
-    var barwa = o ? ownerVar(o) : 'var(--ink-3)';
 
-    // pasek 100% osoby: kolejne konta (tylko na plusie) w odcieniach jej barwy
+    // pasek 100% osoby: jej konta w tych samych barwach co w pasku majątku
     var plus = list.filter(function (a) { return lastOf(a).amount > 0; });
-    var odcien = {};
-    plus.forEach(function (a, i) { odcien[a] = ODCIENIE[Math.min(i, ODCIENIE.length - 1)]; });
     var pasek = plus.length > 1
-      ? '<div class="abar">' + plus.map(function (a) {
-          return '<span style="flex:' + lastOf(a).amount + ' 1 0;background:' + barwa +
-            ';opacity:' + odcien[a] + '"></span>';
-        }).join('') + '</div>'
+      ? paskiHTML(plus.map(function (a) {
+          return { nazwa: splitName(nazwaZ(a)).rest, v: lastOf(a).amount, slot: slotKonta(a, kol) };
+        }), baza, 'thin')
       : '';
 
+    var udzial = ord.length > 1 ? pctInt(baza, majatekPlus) : '';
     var head = jedna && !o ? '' :
       '<div class="ohead">' +
-        '<span class="on"><i style="background:' + barwa + '"></i>' +
-          esc(o || 'Bez właściciela') + '</span>' +
+        '<span class="on"><i style="background:' + (o ? ownerVar(o) : 'var(--ink-3)') + '"></i>' +
+          esc(o || 'Bez właściciela') +
+          (udzial ? ' <span class="op num">· ' + udzial + ' oszczędności</span>' : '') + '</span>' +
         '<span class="ot num">' + zl0(sum) + ' zł</span>' +
       '</div>';
     return '<div class="ogroup">' + head + pasek +
       '<div class="tiles">' + list.map(function (a) {
-        return tileHTML(a, plus.length > 1 ? baza : 0, odcien[a] === undefined ? null : odcien[a]);
+        return tileHTML(a, plus.length > 1 ? baza : 0, kol);
       }).join('') + '</div></div>';
   }).join('') +
   '<div class="tiles" style="margin-top:9px">' +
@@ -1882,7 +1947,7 @@ function render() {
     var wl = ownerOf(active);
     document.getElementById('progMeta').textContent = wl || '';
     document.getElementById('progName').innerHTML =
-      '<i style="background:' + (wl ? ownerVar(wl) : 'var(--ink-3)') + '"></i>' +
+      '<i style="background:' + (last.amount > 0 ? kolorSlotu(slotKonta(active)) : 'var(--ink-3)') + '"></i>' +
       '<span>' + nameHTML(nazwaZ(active)) + '</span>';
     document.getElementById('figLast').textContent = zl0(last.amount) + ' zł';
 
